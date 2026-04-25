@@ -1,0 +1,142 @@
+{
+  "project_context": {
+    "domain": "Security / Utility / Reception",
+    "theme": "light",
+    "archetype_selected": "Archetype 4 (Swiss & High-Contrast) - Softened Utility Variant",
+    "rationale": "For a security prototype, trust, clarity, and speed are paramount. The UI must strip away decorative noise, relying strictly on structural typography, distinct borders, and highly legible contrast. The aesthetic is purely functional and mobile-first."
+  },
+  "colors": {
+    "background": {
+      "default": "#FAFAFA",
+      "surface": "#FFFFFF",
+      "elevated": "#F1F5F9"
+    },
+    "text": {
+      "primary": "#0F172A",
+      "secondary": "#475569",
+      "tertiary": "#94A3B8"
+    },
+    "primary_action": {
+      "background": "#0F172A",
+      "text": "#FFFFFF",
+      "hover": "#1E293B"
+    },
+    "border": {
+      "default": "#E2E8F0",
+      "focus": "#94A3B8"
+    },
+    "semantic_status": {
+      "pending": {
+        "bg": "#FEF3C7",
+        "text": "#B45309",
+        "border": "#FDE68A"
+      },
+      "approved": {
+        "bg": "#ECFDF5",
+        "text": "#047857",
+        "border": "#A7F3D0"
+      },
+      "rejected": {
+        "bg": "#FEF2F2",
+        "text": "#B91C1C",
+        "border": "#FECACA"
+      }
+    }
+  },
+  "typography": {
+    "rules": {
+      "headings": "font-sans font-semibold tracking-tight text-slate-900",
+      "body": "font-sans font-normal tracking-normal text-slate-600",
+      "labels": "font-sans font-medium tracking-wide text-xs uppercase text-slate-500"
+    },
+    "scale": {
+      "h1": "text-3xl md:text-4xl",
+      "h2": "text-2xl md:text-3xl",
+      "h3": "text-lg md:text-xl",
+      "body": "text-base",
+      "small": "text-sm",
+      "tiny_label": "text-xs"
+    },
+    "families_to_use": {
+      "primary": "Outfit, sans-serif",
+      "secondary": "Manrope, sans-serif"
+    }
+  },
+  "layout_and_spacing": {
+    "mobile_container": "max-w-md mx-auto min-h-screen bg-neutral-50",
+    "padding_rules": {
+      "screen_edge": "px-6 py-8",
+      "form_gap": "gap-6",
+      "card_internal": "p-5"
+    },
+    "alignment": "Left-aligned for all form labels and inputs. Center-aligned for PIN entry and major CTAs to emphasize the mobile target area.",
+    "borders_and_radius": {
+      "cards": "rounded-2xl border border-slate-200",
+      "inputs": "rounded-xl border border-slate-200 bg-white",
+      "buttons": "rounded-xl"
+    }
+  },
+  "components": {
+    "inputs": {
+      "style": "h-14 w-full px-4 bg-white border border-slate-200 rounded-xl text-base text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 transition-shadow",
+      "label": "block mb-2 text-sm font-medium text-slate-700"
+    },
+    "buttons": {
+      "primary_full": "w-full h-14 bg-slate-900 text-white rounded-xl font-medium text-base flex items-center justify-center active:bg-slate-800 transition-colors",
+      "secondary_outline": "w-full h-14 bg-white border border-slate-200 text-slate-900 rounded-xl font-medium flex items-center justify-center active:bg-slate-50 transition-colors",
+      "camera_capture": "aspect-square w-24 rounded-full bg-slate-100 border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-500 mx-auto"
+    },
+    "cards": {
+      "admin_list_item": "bg-white p-5 rounded-2xl border border-slate-200 flex flex-col gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.04)]",
+      "visitor_pass": "bg-white p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center text-center gap-4 relative overflow-hidden"
+    },
+    "status_badges": {
+      "base": "px-3 py-1 rounded-full text-xs font-medium border"
+    },
+    "pin_pad": {
+      "display": "flex justify-center gap-4 mb-8",
+      "dot_empty": "w-4 h-4 rounded-full bg-slate-200",
+      "dot_filled": "w-4 h-4 rounded-full bg-slate-900",
+      "keypad_button": "w-20 h-20 rounded-full flex items-center justify-center text-2xl font-medium text-slate-900 active:bg-slate-100 transition-colors"
+    }
+  },
+  "motion_and_interactions": {
+    "rule": "Strictly minimal. No heavy animations. Speed is the priority.",
+    "allowed_effects": [
+      "active:scale-[0.98] on major buttons to confirm touch interaction",
+      "Subtle opacity transitions on status changes",
+      "Slide-up transition for the camera permission/capture modal"
+    ]
+  },
+  "media_and_icons": {
+    "library": "lucide-react",
+    "icon_mapping": {
+      "empty_state_admin": "ShieldCheck (size 48, text-slate-300, 1px stroke)",
+      "camera_placeholder": "Camera (size 24, text-slate-400)",
+      "qr_landing_hero": "QrCode (size 64, text-slate-900, 1.5px stroke)",
+      "visitor_pass_approved": "CheckCircle2 (size 32, text-emerald-500)",
+      "visitor_pass_rejected": "XCircle (size 32, text-red-500)"
+    },
+    "images": {
+      "note": "Per design constraints, avoid heavy photography. Rely entirely on structural layout, typography, and crisp Lucide icons to establish the security/utility aesthetic."
+    }
+  },
+  "testing_attributes": {
+    "requirement": "All interactive elements must include `data-testid`",
+    "examples": [
+      "data-testid='visitor-name-input'",
+      "data-testid='submit-visitor-btn'",
+      "data-testid='admin-pin-digit-1'",
+      "data-testid='approve-visitor-btn'",
+      "data-testid='reject-visitor-btn'"
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Build the application specifically for a mobile-first web view or React Native Expo web target. Enforce a max-width container (max-w-md) centered on desktop to mimic a mobile screen.",
+    "Use standard HTML input type='file' accept='image/*' capture='environment' for the live camera capture to keep dependencies light and adhere to web standards.",
+    "For the PIN pad, implement a custom grid of numbers 0-9 with a backspace button, purely driven by React state (no complex form libraries).",
+    "Ensure the Visitor Pass page works via a simple URL route (e.g., /pass?phone=1234) and does not require complex routing logic.",
+    "Use purely Tailwind CSS classes mapped directly from the `components` section. Do not introduce custom CSS files unless absolutely necessary.",
+    "For icons, import directly from 'lucide-react' as specified in media_and_icons."
+  ]
+}
