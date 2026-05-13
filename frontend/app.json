@@ -20,7 +20,9 @@
         "backgroundColor": "#FAFAFA"
       },
       "edgeToEdgeEnabled": true,
-      "permissions": ["android.permission.CAMERA"]
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -43,7 +45,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#FAFAFA"
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
