@@ -104,12 +104,14 @@ export default function VisitorForm() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
       style={s.flex}
     >
       <ScrollView
         contentContainerStyle={s.scroll}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         testID="visitor-form-scroll"
       >
         <View style={s.header}>

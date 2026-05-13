@@ -1,8 +1,29 @@
+import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
+import * as SplashScreen from 'expo-splash-screen';
+import { Ionicons } from '@expo/vector-icons';
+import { View } from 'react-native';
+
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts({
+    ...Ionicons.font,
+  });
+
+  useEffect(() => {
+    if (fontsLoaded || fontError) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [fontsLoaded, fontError]);
+
+  if (!fontsLoaded && !fontError) {
+    return <View style={{ flex: 1, backgroundColor: '#FAFAFA' }} />;
+  }
+
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />

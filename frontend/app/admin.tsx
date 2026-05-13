@@ -66,6 +66,8 @@ export default function Admin() {
     try {
       const updated = await updateStatus(id, status, pin);
       setItems((prev) => prev.map((v) => (v.id === id ? updated : v)));
+      // Refetch in background to stay in sync with backend (other admins, etc.)
+      load(pin).catch(() => {});
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed');
     }
