@@ -1,13 +1,17 @@
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
 
+import type { VisitorCategory } from './theme';
+
 export type VisitorStatus = 'pending' | 'approved' | 'rejected';
 
 export interface Visitor {
   id: string;
+  pass_number: string;
   full_name: string;
   mobile: string;
   purpose: string;
   person_to_meet: string;
+  category: VisitorCategory;
   photo_base64?: string | null;
   status: VisitorStatus;
   created_at: string;
@@ -18,6 +22,7 @@ export async function createVisitor(payload: {
   mobile: string;
   purpose: string;
   person_to_meet: string;
+  category: VisitorCategory;
   photo_base64?: string | null;
 }): Promise<Visitor> {
   const res = await fetch(`${BASE}/api/visitors`, {

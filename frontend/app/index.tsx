@@ -15,8 +15,16 @@ import {
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radius, spacing } from '../src/theme';
+import {
+  colors,
+  radius,
+  spacing,
+  CATEGORIES,
+  categoryColors,
+  type VisitorCategory,
+} from '../src/theme';
 import { createVisitor } from '../src/api';
+import { MaxwellHeader } from '../src/MaxwellLogo';
 
 export default function VisitorForm() {
   const router = useRouter();
@@ -24,6 +32,7 @@ export default function VisitorForm() {
   const [mobile, setMobile] = useState('');
   const [purpose, setPurpose] = useState('');
   const [personToMeet, setPersonToMeet] = useState('');
+  const [category, setCategory] = useState<VisitorCategory>('staff_visit');
   const [photo, setPhoto] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -67,6 +76,7 @@ export default function VisitorForm() {
         mobile: mobile.trim(),
         purpose: purpose.trim(),
         person_to_meet: personToMeet.trim(),
+        category,
         photo_base64: photo,
       });
       router.replace({ pathname: '/success', params: { id: v.id, mobile: v.mobile } });
@@ -114,8 +124,9 @@ export default function VisitorForm() {
         keyboardDismissMode="on-drag"
         testID="visitor-form-scroll"
       >
+        <MaxwellHeader subtitle="Visitor Management" />
+
         <View style={s.header}>
-          <Ionicons name="qr-code-outline" size={36} color={colors.textPrimary} />
           <Text style={s.title} testID="visitor-form-title">
             Visitor Entry Form
           </Text>
@@ -131,6 +142,7 @@ export default function VisitorForm() {
             placeholderTextColor={colors.textTertiary}
             style={s.input}
             autoCapitalize="words"
+            returnKeyType="next"
           />
         </Field>
 
@@ -144,6 +156,7 @@ export default function VisitorForm() {
             keyboardType="phone-pad"
             style={s.input}
             maxLength={15}
+            returnKeyType="next"
           />
         </Field>
 
@@ -155,6 +168,7 @@ export default function VisitorForm() {
             placeholder="Meeting, Delivery, Interview..."
             placeholderTextColor={colors.textTertiary}
             style={s.input}
+            returnKeyType="next"
           />
         </Field>
 
@@ -166,7 +180,47 @@ export default function VisitorForm() {
             placeholder="Name of host"
             placeholderTextColor={colors.textTertiary}
             style={s.input}
+            returnKeyType="done"
           />
+        </Field>
+
+        <Field label="Visitor Category *">
+          <View style={s.categoryRow}>
+            {CATEGORIES.map((c) => {
+              const active = category === c.value;
+              const tint = categoryColors[c.value];
+              return (
+                <TouchableOpacity
+                  key={c.value}
+                  testID={`category-option-${c.value}`}
+                  onPress={() => setCategory(c.value)}
+                  activeOpacity={0.85}
+                  style={[
+                    s.categoryChip,
+                    active && {
+                      backgroundColor: tint.bg,
+                      borderColor: tint.accent,
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      s.categoryDot,
+                      { backgroundColor: active ? tint.accent : colors.textTertiary },
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      s.categoryText,
+                      active && { color: tint.text, fontWeight: '700' },
+                    ]}
+                  >
+                    {c.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </Field>
 
         <Field label="Photo">
@@ -231,7 +285,7 @@ const s = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.bg },
   scroll: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
   header: { alignItems: 'flex-start', marginBottom: spacing.lg, gap: 8 },
-  title: { fontSize: 26, fontWeight: '700', color: colors.textPrimary, letterSpacing: -0.4 },
+  title: { fontSize: 24, fontWeight: '700', color: colors.textPrimary, letterSpacing: -0.4 },
   subtitle: { fontSize: 14, color: colors.textSecondary },
   label: { fontSize: 13, color: colors.textSecondary, marginBottom: 8, fontWeight: '500' },
   input: {
@@ -244,6 +298,20 @@ const s = StyleSheet.create({
     backgroundColor: colors.surface,
     color: colors.textPrimary,
   },
+  categoryRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  categoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  categoryDot: { width: 8, height: 8, borderRadius: 4 },
+  categoryText: { color: colors.textSecondary, fontSize: 13, fontWeight: '500' },
   photoRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   photoPreview: {
     width: 72,

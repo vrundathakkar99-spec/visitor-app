@@ -9,12 +9,14 @@ import {
   Alert,
   RefreshControl,
   Image,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radius, spacing } from '../src/theme';
+import { colors, radius, spacing, categoryColors } from '../src/theme';
 import { listVisitors, updateStatus, verifyPin, type Visitor } from '../src/api';
 import { StatusBadge } from '../src/StatusBadge';
+import { CategoryBadge } from '../src/CategoryBadge';
 
 export default function Admin() {
   const router = useRouter();
@@ -171,8 +173,14 @@ export default function Admin() {
               <Text style={s.empty}>No visitor requests in this view.</Text>
             </View>
           )}
-          {visible.map((v) => (
-            <View key={v.id} style={s.card} testID={`admin-card-${v.id}`}>
+          {visible.map((v) => {
+            const cat = categoryColors[v.category];
+            return (
+            <View
+              key={v.id}
+              style={[s.card, { borderLeftWidth: 4, borderLeftColor: cat.accent }]}
+              testID={`admin-card-${v.id}`}
+            >
               <View style={s.cardTop}>
                 {v.photo_base64 ? (
                   <Image source={{ uri: v.photo_base64 }} style={s.avatar} />
@@ -186,6 +194,11 @@ export default function Admin() {
                   <Text style={s.meta}>{v.mobile}</Text>
                 </View>
                 <StatusBadge status={v.status} />
+              </View>
+
+              <View style={s.badgeRow}>
+                <CategoryBadge category={v.category} />
+                <Text style={s.passNumber}>{v.pass_number}</Text>
               </View>
 
               <Row label="Person to Meet" value={v.person_to_meet || '—'} />
@@ -223,7 +236,8 @@ export default function Admin() {
                 </TouchableOpacity>
               )}
             </View>
-          ))}
+            );
+          })}
         </ScrollView>
       )}
     </View>
@@ -314,6 +328,19 @@ const s = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.md,
     gap: 8,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 2,
+    marginBottom: 4,
+  },
+  passNumber: {
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    color: colors.textTertiary,
+    letterSpacing: 0.5,
   },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 4 },
   avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.elevated },

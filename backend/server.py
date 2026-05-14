@@ -4,6 +4,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import random
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Literal
@@ -14,35 +15,41 @@ from datetime import datetime, timezone
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 ADMIN_PIN = os.environ.get('ADMIN_PIN', '1234')
 
-# Create the main app without a prefix
 app = FastAPI()
-
-# Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
 
-# ---- Models ----
+VisitorCategory = Literal["factory_visit", "staff_visit", "management"]
+
+
+def _generate_pass_number() -> str:
+    today = datetime.now(timezone.utc).strftime("%Y%m%d")
+    return f"MX-{today}-{random.randint(1000, 9999)}"
+
+
 class VisitorCreate(BaseModel):
     full_name: str
     mobile: str
     purpose: str
     person_to_meet: str
-    photo_base64: Optional[str] = None  # data URL or raw base64
+    category: VisitorCategory = "staff_visit"
+    photo_base64: Optional[str] = None
 
 
 class Visitor(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    pass_number: str = Field(default_factory=_generate_pass_number)
     full_name: str
     mobile: str
     purpose: str
     person_to_meet: str
+    category: VisitorCategory = "staff_visit"
     photo_base64: Optional[str] = None
     status: Literal["pending", "approved", "rejected"] = "pending"
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -56,7 +63,13 @@ class PinVerify(BaseModel):
     pin: str
 
 
-# ---- Routes ----
+def _hydrate(doc: dict) -> Visitor:
+    """Add defaults for legacy docs missing new fields."""
+    doc.setdefault("category", "staff_visit")
+    doc.setdefault("pass_number", _generate_pass_number())
+    return Visitor(**doc)
+
+
 @api_router.get("/")
 async def root():
     return {"message": "Visitor Entry API"}
@@ -76,13 +89,13 @@ async def list_visitors(x_admin_pin: Optional[str] = Header(default=None)):
     if x_admin_pin != ADMIN_PIN:
         raise HTTPException(status_code=401, detail="Invalid admin PIN")
     docs = await db.visitors.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
-    return [Visitor(**d) for d in docs]
+    return [_hydrate(d) for d in docs]
 
 
 @api_router.get("/visitors/by-mobile/{mobile}", response_model=List[Visitor])
 async def list_by_mobile(mobile: str):
     docs = await db.visitors.find({"mobile": mobile}, {"_id": 0}).sort("created_at", -1).to_list(50)
-    return [Visitor(**d) for d in docs]
+    return [_hydrate(d) for d in docs]
 
 
 @api_router.get("/visitors/{visitor_id}", response_model=Visitor)
@@ -90,7 +103,7 @@ async def get_visitor(visitor_id: str):
     doc = await db.visitors.find_one({"id": visitor_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Visitor not found")
-    return Visitor(**doc)
+    return _hydrate(doc)
 
 
 @api_router.patch("/visitors/{visitor_id}/status", response_model=Visitor)
@@ -105,7 +118,7 @@ async def update_status(visitor_id: str, payload: StatusUpdate, x_admin_pin: Opt
     )
     if not result:
         raise HTTPException(status_code=404, detail="Visitor not found")
-    return Visitor(**result)
+    return _hydrate(result)
 
 
 @api_router.post("/admin/verify-pin")
@@ -113,7 +126,6 @@ async def verify_pin(payload: PinVerify):
     return {"ok": payload.pin == ADMIN_PIN}
 
 
-# Include the router in the main app
 app.include_router(api_router)
 
 app.add_middleware(
