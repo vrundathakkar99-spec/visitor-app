@@ -12,6 +12,7 @@ export interface Visitor {
   purpose: string;
   person_to_meet: string;
   category: VisitorCategory;
+  sub_category?: string | null;
   photo_base64?: string | null;
   status: VisitorStatus;
   created_at: string;
@@ -23,6 +24,7 @@ export async function createVisitor(payload: {
   purpose: string;
   person_to_meet: string;
   category: VisitorCategory;
+  sub_category?: string | null;
   photo_base64?: string | null;
 }): Promise<Visitor> {
   const res = await fetch(`${BASE}/api/visitors`, {
@@ -77,4 +79,16 @@ export async function verifyPin(pin: string): Promise<boolean> {
   if (!res.ok) return false;
   const data = await res.json();
   return Boolean(data.ok);
+}
+
+export function qrUrlFor(text: string, size = 8): string {
+  return `${BASE}/api/qr?text=${encodeURIComponent(text)}&size=${size}`;
+}
+
+export function qrEntryUrl(size = 10): string {
+  return `${BASE}/api/qr-entry?size=${size}`;
+}
+
+export function publicEntryUrl(): string {
+  return BASE ? `${BASE}/` : '/';
 }

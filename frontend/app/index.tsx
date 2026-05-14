@@ -20,6 +20,8 @@ import {
   radius,
   spacing,
   CATEGORIES,
+  SUB_OPTIONS,
+  subOptionLabel,
   categoryColors,
   type VisitorCategory,
 } from '../src/theme';
@@ -33,12 +35,18 @@ export default function VisitorForm() {
   const [purpose, setPurpose] = useState('');
   const [personToMeet, setPersonToMeet] = useState('');
   const [category, setCategory] = useState<VisitorCategory>('staff_visit');
+  const [subCategory, setSubCategory] = useState<string | null>(null);
   const [photo, setPhoto] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const [permission, requestPermission] = useCameraPermissions();
   const [cameraOpen, setCameraOpen] = useState(false);
   const cameraRef = useRef<CameraView | null>(null);
+
+  const handleCategoryChange = (next: VisitorCategory) => {
+    setCategory(next);
+    setSubCategory(null); // reset dependent dropdown
+  };
 
   const openCamera = async () => {
     if (!permission?.granted) {
@@ -69,6 +77,10 @@ export default function VisitorForm() {
       Alert.alert('Invalid mobile', 'Please enter a valid mobile number.');
       return;
     }
+    if (!subCategory) {
+      Alert.alert('Select sub-option', `Please select a ${subOptionLabel[category]} for ${CATEGORIES.find((x) => x.value === category)?.label}.`);
+      return;
+    }
     setSubmitting(true);
     try {
       const v = await createVisitor({
@@ -77,6 +89,7 @@ export default function VisitorForm() {
         purpose: purpose.trim(),
         person_to_meet: personToMeet.trim(),
         category,
+        sub_category: subCategory,
         photo_base64: photo,
       });
       router.replace({ pathname: '/success', params: { id: v.id, mobile: v.mobile } });
@@ -111,6 +124,9 @@ export default function VisitorForm() {
       </View>
     );
   }
+
+  const tint = categoryColors[category];
+  const subs = SUB_OPTIONS[category];
 
   return (
     <KeyboardAvoidingView
@@ -188,34 +204,64 @@ export default function VisitorForm() {
           <View style={s.categoryRow}>
             {CATEGORIES.map((c) => {
               const active = category === c.value;
-              const tint = categoryColors[c.value];
+              const tint2 = categoryColors[c.value];
               return (
                 <TouchableOpacity
                   key={c.value}
                   testID={`category-option-${c.value}`}
-                  onPress={() => setCategory(c.value)}
+                  onPress={() => handleCategoryChange(c.value)}
                   activeOpacity={0.85}
                   style={[
                     s.categoryChip,
                     active && {
-                      backgroundColor: tint.bg,
-                      borderColor: tint.accent,
+                      backgroundColor: tint2.bg,
+                      borderColor: tint2.accent,
                     },
                   ]}
                 >
                   <View
                     style={[
                       s.categoryDot,
-                      { backgroundColor: active ? tint.accent : colors.textTertiary },
+                      { backgroundColor: active ? tint2.accent : colors.textTertiary },
                     ]}
                   />
                   <Text
                     style={[
                       s.categoryText,
-                      active && { color: tint.text, fontWeight: '700' },
+                      active && { color: tint2.text, fontWeight: '700' },
                     ]}
                   >
                     {c.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </Field>
+
+        <Field label={`${subOptionLabel[category]} *`}>
+          <View style={s.subRow}>
+            {subs.map((opt) => {
+              const active = subCategory === opt;
+              return (
+                <TouchableOpacity
+                  key={opt}
+                  testID={`sub-option-${opt}`}
+                  onPress={() => setSubCategory(opt)}
+                  activeOpacity={0.85}
+                  style={[
+                    s.subChip,
+                    active && { backgroundColor: tint.bg, borderColor: tint.accent },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      s.subText,
+                      active && { color: tint.text, fontWeight: '700' },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {opt}
                   </Text>
                 </TouchableOpacity>
               );
@@ -312,6 +358,16 @@ const s = StyleSheet.create({
   },
   categoryDot: { width: 8, height: 8, borderRadius: 4 },
   categoryText: { color: colors.textSecondary, fontSize: 13, fontWeight: '500' },
+  subRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  subChip: {
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  subText: { color: colors.textSecondary, fontSize: 12, fontWeight: '500' },
   photoRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   photoPreview: {
     width: 72,
@@ -359,26 +415,17 @@ const s = StyleSheet.create({
   cameraWrap: { flex: 1, backgroundColor: '#000' },
   cameraTopBar: { position: 'absolute', top: 50, left: 16, right: 16 },
   cameraCloseBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 40, height: 40, borderRadius: 20,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
   cameraBottomBar: {
-    position: 'absolute',
-    bottom: 50,
-    left: 0,
-    right: 0,
+    position: 'absolute', bottom: 50, left: 0, right: 0,
     alignItems: 'center',
   },
   shutter: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
+    width: 76, height: 76, borderRadius: 38,
     backgroundColor: '#fff',
-    borderWidth: 5,
-    borderColor: 'rgba(255,255,255,0.4)',
+    borderWidth: 5, borderColor: 'rgba(255,255,255,0.4)',
   },
 });

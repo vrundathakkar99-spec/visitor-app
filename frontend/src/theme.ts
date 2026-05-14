@@ -10,6 +10,7 @@ export const colors = {
   primaryHover: '#1E293B',
   border: '#E2E8F0',
   borderFocus: '#94A3B8',
+  brandBlue: '#4974B2',
   pendingBg: '#FEF3C7',
   pendingText: '#B45309',
   pendingBorder: '#FDE68A',
@@ -32,27 +33,46 @@ export const CATEGORIES: { value: VisitorCategory; label: string }[] = [
   { value: 'management', label: 'Management' },
 ];
 
+export const SUB_OPTIONS: Record<VisitorCategory, string[]> = {
+  factory_visit: ['Production', 'QC'],
+  staff_visit: ['HR', 'SALES', 'ACCOUNT', 'PURCHASE', 'MAINTENANCE', 'DESIGN', 'QC', 'OPERATION'],
+  management: [
+    'RAJKUMAR CHAUDHARY',
+    'VINU CHAVDA',
+    'PRABHAT SINGH KUMAR',
+    'POOJA LOKHANDE',
+    'KRATI GUPTA',
+    'CHETNA BODKE',
+  ],
+};
+
+export const subOptionLabel: Record<VisitorCategory, string> = {
+  factory_visit: 'Department',
+  staff_visit: 'Department',
+  management: 'Person',
+};
+
 export const categoryColors: Record<
   VisitorCategory,
   { bg: string; text: string; border: string; accent: string }
 > = {
   factory_visit: {
-    bg: '#FEF9C3', // yellow-100
-    text: '#854D0E', // yellow-800
-    border: '#FDE68A', // yellow-300
-    accent: '#CA8A04', // yellow-600
+    bg: '#FEF9C3',
+    text: '#854D0E',
+    border: '#FDE68A',
+    accent: '#CA8A04',
   },
   staff_visit: {
-    bg: '#DBEAFE', // blue-100
-    text: '#1E40AF', // blue-800
-    border: '#BFDBFE', // blue-300
-    accent: '#2563EB', // blue-600
+    bg: '#DBEAFE',
+    text: '#1E40AF',
+    border: '#BFDBFE',
+    accent: '#2563EB',
   },
   management: {
-    bg: '#DCFCE7', // green-100
-    text: '#166534', // green-800
-    border: '#BBF7D0', // green-300
-    accent: '#16A34A', // green-600
+    bg: '#DCFCE7',
+    text: '#166534',
+    border: '#BBF7D0',
+    accent: '#16A34A',
   },
 };
 

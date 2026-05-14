@@ -134,6 +134,17 @@ export default function Admin() {
 
   return (
     <View style={s.flex}>
+      <View style={s.topBar}>
+        <TouchableOpacity
+          testID="entry-qr-btn"
+          onPress={() => router.push('/entry-qr')}
+          style={s.entryQrBtn}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="qr-code" size={16} color="#fff" />
+          <Text style={s.entryQrText}>Entry QR</Text>
+        </TouchableOpacity>
+      </View>
       <View style={s.filterRow}>
         {(['all', 'pending', 'approved', 'rejected'] as const).map((f) => (
           <TouchableOpacity
@@ -201,6 +212,10 @@ export default function Admin() {
                 <Text style={s.passNumber}>{v.pass_number}</Text>
               </View>
 
+              {v.sub_category ? (
+                <Row label={v.category === 'management' ? 'Person' : 'Department'} value={v.sub_category} />
+              ) : null}
+
               <Row label="Person to Meet" value={v.person_to_meet || '—'} />
               <Row label="Purpose" value={v.purpose} />
               <Row label="Time" value={formatDate(v.created_at)} />
@@ -263,6 +278,22 @@ function formatDate(iso: string) {
 
 const s = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.bg },
+  topBar: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  entryQrBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.primaryBg,
+    paddingHorizontal: 12,
+    height: 36,
+    borderRadius: 999,
+  },
+  entryQrText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   pinContainer: {
     flex: 1,
     backgroundColor: colors.bg,

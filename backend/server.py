@@ -1,8 +1,10 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Header
+from fastapi import FastAPI, APIRouter, HTTPException, Header, Query
+from fastapi.responses import Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import io
 import logging
 import random
 from pathlib import Path
@@ -10,6 +12,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Literal
 import uuid
 from datetime import datetime, timezone
+import qrcode
 
 
 ROOT_DIR = Path(__file__).parent
@@ -28,6 +31,23 @@ api_router = APIRouter(prefix="/api")
 VisitorCategory = Literal["factory_visit", "staff_visit", "management"]
 
 
+SUB_OPTIONS: dict[str, list[str]] = {
+    "factory_visit": ["Production", "QC"],
+    "staff_visit": [
+        "HR", "SALES", "ACCOUNT", "PURCHASE",
+        "MAINTENANCE", "DESIGN", "QC", "OPERATION",
+    ],
+    "management": [
+        "RAJKUMAR CHAUDHARY",
+        "VINU CHAVDA",
+        "PRABHAT SINGH KUMAR",
+        "POOJA LOKHANDE",
+        "KRATI GUPTA",
+        "CHETNA BODKE",
+    ],
+}
+
+
 def _generate_pass_number() -> str:
     today = datetime.now(timezone.utc).strftime("%Y%m%d")
     return f"MX-{today}-{random.randint(1000, 9999)}"
@@ -39,6 +59,7 @@ class VisitorCreate(BaseModel):
     purpose: str
     person_to_meet: str
     category: VisitorCategory = "staff_visit"
+    sub_category: Optional[str] = None
     photo_base64: Optional[str] = None
 
 
@@ -50,6 +71,7 @@ class Visitor(BaseModel):
     purpose: str
     person_to_meet: str
     category: VisitorCategory = "staff_visit"
+    sub_category: Optional[str] = None
     photo_base64: Optional[str] = None
     status: Literal["pending", "approved", "rejected"] = "pending"
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -64,10 +86,19 @@ class PinVerify(BaseModel):
 
 
 def _hydrate(doc: dict) -> Visitor:
-    """Add defaults for legacy docs missing new fields."""
     doc.setdefault("category", "staff_visit")
     doc.setdefault("pass_number", _generate_pass_number())
+    doc.setdefault("sub_category", None)
     return Visitor(**doc)
+
+
+def _validate_sub(category: str, sub: Optional[str]) -> Optional[str]:
+    if sub is None or sub == "":
+        return None
+    allowed = SUB_OPTIONS.get(category, [])
+    if sub not in allowed:
+        raise HTTPException(status_code=400, detail=f"sub_category must be one of {allowed}")
+    return sub
 
 
 @api_router.get("/")
@@ -75,11 +106,19 @@ async def root():
     return {"message": "Visitor Entry API"}
 
 
+@api_router.get("/categories")
+async def get_categories():
+    """Return category + sub-option map for the dropdown."""
+    return SUB_OPTIONS
+
+
 @api_router.post("/visitors", response_model=Visitor)
 async def create_visitor(payload: VisitorCreate):
     if not payload.full_name.strip() or not payload.mobile.strip() or not payload.purpose.strip():
         raise HTTPException(status_code=400, detail="full_name, mobile and purpose are required")
-    visitor = Visitor(**payload.model_dump())
+    data = payload.model_dump()
+    data["sub_category"] = _validate_sub(data["category"], data.get("sub_category"))
+    visitor = Visitor(**data)
     await db.visitors.insert_one(visitor.model_dump())
     return visitor
 
@@ -126,6 +165,43 @@ async def verify_pin(payload: PinVerify):
     return {"ok": payload.pin == ADMIN_PIN}
 
 
+def _qr_png(text: str, box_size: int = 8) -> bytes:
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=box_size,
+        border=2,
+    )
+    qr.add_data(text)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+@api_router.get("/qr")
+async def qr_for(text: str = Query(..., min_length=1, max_length=2048), size: int = Query(8, ge=2, le=20)):
+    """Generic QR-code generator. Returns PNG bytes."""
+    png = _qr_png(text, box_size=size)
+    return Response(content=png, media_type="image/png")
+
+
+@api_router.get("/qr-entry")
+async def qr_entry(size: int = Query(10, ge=2, le=20)):
+    """QR code that opens the visitor form in any mobile browser."""
+    public_url = os.environ.get("PUBLIC_APP_URL") or os.environ.get("EXPO_PUBLIC_BACKEND_URL") or "https://guest-pass-simple.preview.emergentagent.com"
+    # Ensure trailing slash points at the form root
+    if not public_url.endswith("/"):
+        public_url = public_url + "/"
+    png = _qr_png(public_url, box_size=size)
+    return Response(
+        content=png,
+        media_type="image/png",
+        headers={"X-Entry-Url": public_url},
+    )
+
+
 app.include_router(api_router)
 
 app.add_middleware(
@@ -134,6 +210,7 @@ app.add_middleware(
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Entry-Url"],
 )
 
 logging.basicConfig(

@@ -39,6 +39,7 @@ export default function RootLayout() {
         <Stack.Screen name="success" options={{ title: 'Submitted', headerBackVisible: false }} />
         <Stack.Screen name="status" options={{ title: 'Check Status' }} />
         <Stack.Screen name="admin" options={{ title: 'Admin' }} />
+        <Stack.Screen name="entry-qr" options={{ title: 'Entry QR' }} />
         <Stack.Screen name="pass/[id]" options={{ title: 'Visitor Pass' }} />
       </Stack>
     </SafeAreaProvider>
