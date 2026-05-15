@@ -1,49 +1,69 @@
-# Visitor Entry App — PRD
+# Maxwell Visitor Entry App — PRD
 
 ## Overview
-A lightweight Expo (React Native) + FastAPI + MongoDB visitor entry prototype branded for **Maxwell**. Visitors scan a QR placed at the gate → opens the form in any mobile browser → security/reception admin approves → approved visitors receive a printable horizontal corporate-style pass.
+A lightweight Expo (React Native) + FastAPI + MongoDB visitor management prototype for **Maxwell**. Visitors scan a QR at the gate, fill the form in their mobile browser, and assigned department employees (or admin) approve via in-app dashboard.
 
 ## Public routes
-- `/` — Visitor entry form (works in any mobile browser, no Expo Go required)
+- `/` — Visitor entry form (mobile browser; no app install needed)
 - `/status` — Visitor self-check by mobile number
-- `/pass/[id]` — Visitor pass (horizontal corporate badge)
-- `/admin` — PIN-protected admin dashboard
-- `/entry-qr` — Admin screen: large QR pointing to the public form URL (for printing/displaying at gate)
+- `/pass/[id]` — Vertical badge-style visitor pass with circular MW logo + QR
+- `/admin` — PIN-protected reception/admin dashboard
+- `/entry-qr` — Admin screen with printable Entry QR
+- `/employee/login` — Employee email + password login
+- `/employee/dashboard` — Pending department requests for the logged-in employee (auto-refresh 15s)
 - `/success` — Submission confirmation
 
-## Backend (FastAPI + MongoDB)
-- `GET /api/categories` — returns dependent dropdown map (3 categories + their sub-options)
-- `POST /api/visitors` — create visitor (`category` + optional `sub_category` validated server-side)
-- `GET /api/visitors` (header `X-Admin-Pin`) — list all
-- `GET /api/visitors/by-mobile/{mobile}` — self-lookup
-- `GET /api/visitors/{id}` — single
-- `PATCH /api/visitors/{id}/status` (header `X-Admin-Pin`) — approve/reject
-- `POST /api/admin/verify-pin` — verify 4-digit PIN
-- `GET /api/qr?text=...&size=N` — generic QR PNG
-- `GET /api/qr-entry?size=N` — QR PNG pointing to `PUBLIC_APP_URL` (defaults to `EXPO_PUBLIC_BACKEND_URL`)
+## Visitor categories
+- **Factory Visit** (yellow) — Departments: Operation, QA, QC
+- **Staff Visit** (blue) — Departments: Operation, QA, QC, HR, Maintenance, Account, Purchase, Marketing, **Others** (free-text person name)
+- **Management** (green) — Static persons: RAJKUMAR CHAUDHARY, VINU CHAVDA, PRABHAT SINGH KUMAR, POOJA LOKHANDE, KRATI GUPTA, CHETNA BODKE
 
-Admin PIN: `1234` (env `ADMIN_PIN` in `/app/backend/.env`)
+Cascading dropdown logic: select category → if Factory/Staff, pick department → pick employee (auto-fills if single); if "Others" → free-text input.
 
-## Visitor categories (dependent dropdowns)
-- **Factory Visit** (yellow) → `Production`, `QC`
-- **Staff Visit** (blue) → `HR, SALES, ACCOUNT, PURCHASE, MAINTENANCE, DESIGN, QC, OPERATION`
-- **Management** (green) → `RAJKUMAR CHAUDHARY, VINU CHAVDA, PRABHAT SINGH KUMAR, POOJA LOKHANDE, KRATI GUPTA, CHETNA BODKE`
+## Employees seeded
+| Dept | Name | Email |
+|---|---|---|
+| Operation | Nishit Patel | nishit.patel@maxwell.com |
+| QA | Vaibhav Desai | vaibhav.desai@maxwell.com |
+| QC | Vasant Sarla | vasant.sarla@maxwell.com |
+| HR | Mohit Goswami / Vrunda Thakkar / Harshida Pandor | *.firstname.lastname@maxwell.com |
+| Maintenance | Patel Pritesh | patel.pritesh@maxwell.com |
+| Account | Parmar Romik | parmar.romik@maxwell.com |
+| Purchase | Ajinkya Bapat | ajinkya.bapat@maxwell.com |
+| Marketing | Mayur Dod / RajvinderKaur Hunda | *.firstname.lastname@maxwell.com |
 
-## Visitor Pass
-Horizontal landscape badge:
-- Top category color strip showing `CATEGORY • SUB_CATEGORY`
-- Maxwell logo (left) + pass number (right) in header
-- Bordered photo frame on the left (border color = category accent)
-- Details column (name, purpose, person to meet, date/time, status)
-- Real PNG QR code on the right + "SCAN" caption
-- Maxwell footer strip
+Default password: `maxwell@123`. Idempotent seed runs at backend startup.
 
-## Smart enhancements
-1. **QR Entry Access** — Backend-rendered QR (Python `qrcode` lib) means no RN dependency; works in any browser.
-2. **Mobile-number self-service status check** — visitors verify their own approval without app login.
+## Backend (FastAPI + MongoDB + JWT)
+**Public**: `GET /api/categories`, `POST /api/visitors`, `GET /api/visitors/by-mobile/{mobile}`, `GET /api/visitors/{id}`, `GET /api/qr?text=...&size=N`, `GET /api/qr-entry`, `POST /api/admin/verify-pin`, `POST /api/employee/login`
+
+**Auth required**:
+- `GET /api/employee/me` (Bearer)
+- `GET /api/employee/visitors` (Bearer) — filtered by employee's department
+- `PATCH /api/visitors/{id}/status` (X-Admin-Pin **or** Bearer)
+
+**Approval rule** — first responder wins: status changes only allowed when current=pending; else returns **409 Conflict** with `decided_by` info. Employee authorization: must be the named assignee OR same department.
+
+## Visitor Pass (Vertical badge layout)
+- Top color stripe by category
+- Circular MW Maxwell logo + "MAXWELL VISITOR PASS" header
+- Photo frame (bordered with category color)
+- Name + monospace pass-number pill
+- Details: Category / Department / To Meet / Purpose / Date & Time / Mobile
+- Status badge + QR code (encodes pass number)
+- Footer strip with brand line
+- Lanyard hole decoration up top — looks like a hanging ID card
+
+## Environment variables (backend)
+- `MONGO_URL`, `DB_NAME` — Mongo connection
+- `ADMIN_PIN` — admin keypad code (default `1234`)
+- `JWT_SECRET`, `JWT_ALGORITHM` (HS256), `JWT_EXPIRE_HOURS` (12)
+- `EMPLOYEE_DEFAULT_PASSWORD` (`maxwell@123`), `EMPLOYEE_EMAIL_DOMAIN` (`maxwell.com`)
+- `PUBLIC_APP_URL` — required at deploy for `/api/qr-entry` (no hardcoded fallback)
 
 ## Constraints maintained
-- No new RN dependencies for QR; uses backend-generated PNG and `<Image source={{uri}}>`.
-- No login system, no push notifications, no external integrations.
-- Expo Go compatibility maintained (Ionicons font preloaded in `_layout.tsx`).
-- Lightweight bundle; backward-compatible with legacy visitors missing new fields.
+- No new RN dependencies beyond `@react-native-async-storage/async-storage` (works on web + native).
+- No push notifications (in-app polling 15s).
+- No external auth providers (custom JWT + bcrypt).
+- Expo Go compatibility: Ionicons font preloaded in `_layout.tsx`.
+- Camera capture optional (lives behind permission flow).
