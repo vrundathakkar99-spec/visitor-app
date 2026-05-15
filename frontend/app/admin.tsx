@@ -14,7 +14,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing, categoryColors } from '../src/theme';
-import { listVisitors, updateStatus, verifyPin, type Visitor } from '../src/api';
+import { listVisitors, updateStatusAdmin, verifyPin, type Visitor } from '../src/api';
 import { StatusBadge } from '../src/StatusBadge';
 import { CategoryBadge } from '../src/CategoryBadge';
 
@@ -66,12 +66,13 @@ export default function Admin() {
 
   const act = async (id: string, status: 'approved' | 'rejected') => {
     try {
-      const updated = await updateStatus(id, status, pin);
+      const updated = await updateStatusAdmin(id, status, pin);
       setItems((prev) => prev.map((v) => (v.id === id ? updated : v)));
       // Refetch in background to stay in sync with backend (other admins, etc.)
       load(pin).catch(() => {});
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed');
+      Alert.alert('Error', e?.message?.includes('409') || e?.message?.includes('Already') ? 'This request was already decided by someone else.' : (e?.message || 'Failed'));
+      load(pin).catch(() => {});
     }
   };
 
@@ -212,8 +213,8 @@ export default function Admin() {
                 <Text style={s.passNumber}>{v.pass_number}</Text>
               </View>
 
-              {v.sub_category ? (
-                <Row label={v.category === 'management' ? 'Person' : 'Department'} value={v.sub_category} />
+              {v.sub_category || v.assigned_to ? (
+                <Row label={v.category === 'management' ? 'Person' : (v.department || 'Dept')} value={v.assigned_to || v.sub_category || ''} />
               ) : null}
 
               <Row label="Person to Meet" value={v.person_to_meet || '—'} />

@@ -40,6 +40,8 @@ export default function RootLayout() {
         <Stack.Screen name="status" options={{ title: 'Check Status' }} />
         <Stack.Screen name="admin" options={{ title: 'Admin' }} />
         <Stack.Screen name="entry-qr" options={{ title: 'Entry QR' }} />
+        <Stack.Screen name="employee/login" options={{ title: 'Employee Login' }} />
+        <Stack.Screen name="employee/dashboard" options={{ title: 'Employee Dashboard', headerBackVisible: false }} />
         <Stack.Screen name="pass/[id]" options={{ title: 'Visitor Pass' }} />
       </Stack>
     </SafeAreaProvider>

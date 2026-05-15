@@ -1,5 +1,6 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Header, Query
+from fastapi import FastAPI, APIRouter, HTTPException, Header, Query, Depends
 from fastapi.responses import Response
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -7,11 +8,14 @@ import os
 import io
 import logging
 import random
+import re
 from pathlib import Path
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional, Literal
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+import bcrypt
+import jwt
 import qrcode
 
 
@@ -23,29 +27,74 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 ADMIN_PIN = os.environ.get('ADMIN_PIN', '1234')
+JWT_SECRET = os.environ.get('JWT_SECRET', 'dev-secret')
+JWT_ALGORITHM = os.environ.get('JWT_ALGORITHM', 'HS256')
+JWT_EXPIRE_HOURS = int(os.environ.get('JWT_EXPIRE_HOURS', '12'))
+EMPLOYEE_DEFAULT_PASSWORD = os.environ.get('EMPLOYEE_DEFAULT_PASSWORD', 'maxwell@123')
+EMPLOYEE_EMAIL_DOMAIN = os.environ.get('EMPLOYEE_EMAIL_DOMAIN', 'maxwell.com')
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
+# ---- Visitor categories / departments ----
 VisitorCategory = Literal["factory_visit", "staff_visit", "management"]
 
-
-SUB_OPTIONS: dict[str, list[str]] = {
-    "factory_visit": ["Production", "QC"],
-    "staff_visit": [
-        "HR", "SALES", "ACCOUNT", "PURCHASE",
-        "MAINTENANCE", "DESIGN", "QC", "OPERATION",
-    ],
-    "management": [
-        "RAJKUMAR CHAUDHARY",
-        "VINU CHAVDA",
-        "PRABHAT SINGH KUMAR",
-        "POOJA LOKHANDE",
-        "KRATI GUPTA",
-        "CHETNA BODKE",
-    ],
+# Departments + employees by department
+DEPARTMENT_EMPLOYEES: dict[str, list[str]] = {
+    "Operation": ["Nishit Patel"],
+    "QA": ["Vaibhav Desai"],
+    "QC": ["Vasant Sarla"],
+    "HR": ["Mohit Goswami", "Vrunda Thakkar", "Harshida Pandor"],
+    "Maintenance": ["Patel Pritesh"],
+    "Account": ["Parmar Romik"],
+    "Purchase": ["Ajinkya Bapat"],
+    "Marketing": ["Mayur Dod", "RajvinderKaur Hunda"],
 }
+DEPARTMENTS_STAFF = list(DEPARTMENT_EMPLOYEES.keys()) + ["Others"]
+DEPARTMENTS_FACTORY = ["Operation", "QA", "QC"]
+
+# Management persons (existing list)
+MANAGEMENT_PERSONS = [
+    "RAJKUMAR CHAUDHARY",
+    "VINU CHAVDA",
+    "PRABHAT SINGH KUMAR",
+    "POOJA LOKHANDE",
+    "KRATI GUPTA",
+    "CHETNA BODKE",
+]
+
+
+def _email_from_name(name: str) -> str:
+    parts = re.findall(r"[A-Za-z]+", name)
+    if len(parts) == 1:
+        local = parts[0].lower()
+    else:
+        local = f"{parts[0].lower()}.{parts[-1].lower()}"
+    return f"{local}@{EMPLOYEE_EMAIL_DOMAIN}"
+
+
+def _hash_pw(pw: str) -> str:
+    return bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt(rounds=10)).decode("utf-8")
+
+
+def _verify_pw(pw: str, hashed: str) -> bool:
+    try:
+        return bcrypt.checkpw(pw.encode("utf-8"), hashed.encode("utf-8"))
+    except Exception:
+        return False
+
+
+def _create_jwt(employee_id: str, email: str) -> str:
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": employee_id,
+        "email": email,
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(hours=JWT_EXPIRE_HOURS)).timestamp()),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
 def _generate_pass_number() -> str:
@@ -53,13 +102,15 @@ def _generate_pass_number() -> str:
     return f"MX-{today}-{random.randint(1000, 9999)}"
 
 
+# ---- Pydantic models ----
 class VisitorCreate(BaseModel):
     full_name: str
     mobile: str
     purpose: str
-    person_to_meet: str
+    person_to_meet: str = ""
     category: VisitorCategory = "staff_visit"
-    sub_category: Optional[str] = None
+    department: Optional[str] = None  # for staff/factory; None for management
+    assigned_to: Optional[str] = None  # employee/management/custom name
     photo_base64: Optional[str] = None
 
 
@@ -69,11 +120,14 @@ class Visitor(BaseModel):
     full_name: str
     mobile: str
     purpose: str
-    person_to_meet: str
+    person_to_meet: str = ""
     category: VisitorCategory = "staff_visit"
-    sub_category: Optional[str] = None
+    department: Optional[str] = None
+    assigned_to: Optional[str] = None
     photo_base64: Optional[str] = None
     status: Literal["pending", "approved", "rejected"] = "pending"
+    decided_by: Optional[str] = None  # "admin" or employee email
+    decided_at: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -85,22 +139,76 @@ class PinVerify(BaseModel):
     pin: str
 
 
+class EmployeeLogin(BaseModel):
+    email: str
+    password: str
+
+
+class Employee(BaseModel):
+    id: str
+    name: str
+    email: str
+    department: str
+
+
 def _hydrate(doc: dict) -> Visitor:
     doc.setdefault("category", "staff_visit")
     doc.setdefault("pass_number", _generate_pass_number())
-    doc.setdefault("sub_category", None)
+    doc.setdefault("department", None)
+    # back-compat with old `sub_category` field
+    if doc.get("assigned_to") is None and doc.get("sub_category"):
+        doc["assigned_to"] = doc.get("sub_category")
+    doc.setdefault("assigned_to", None)
+    doc.setdefault("person_to_meet", "")
     return Visitor(**doc)
 
 
-def _validate_sub(category: str, sub: Optional[str]) -> Optional[str]:
-    if sub is None or sub == "":
-        return None
-    allowed = SUB_OPTIONS.get(category, [])
-    if sub not in allowed:
-        raise HTTPException(status_code=400, detail=f"sub_category must be one of {allowed}")
-    return sub
+async def get_current_employee(creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme)) -> dict:
+    if not creds or creds.scheme.lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Missing token")
+    try:
+        payload = jwt.decode(creds.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    emp_id = payload.get("sub")
+    if not emp_id:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+    emp = await db.employees.find_one({"id": emp_id}, {"_id": 0, "password_hash": 0})
+    if not emp:
+        raise HTTPException(status_code=401, detail="Employee not found")
+    return emp
 
 
+async def _seed_employees():
+    """Idempotently seed employees from DEPARTMENT_EMPLOYEES."""
+    for dept, people in DEPARTMENT_EMPLOYEES.items():
+        for name in people:
+            email = _email_from_name(name)
+            existing = await db.employees.find_one({"email": email})
+            if existing:
+                # Ensure department is up to date if it changed
+                if existing.get("department") != dept or existing.get("name") != name:
+                    await db.employees.update_one(
+                        {"email": email},
+                        {"$set": {"department": dept, "name": name}},
+                    )
+                continue
+            await db.employees.insert_one({
+                "id": str(uuid.uuid4()),
+                "name": name,
+                "email": email,
+                "department": dept,
+                "password_hash": _hash_pw(EMPLOYEE_DEFAULT_PASSWORD),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+    # Ensure unique index on email
+    try:
+        await db.employees.create_index("email", unique=True)
+    except Exception:
+        pass
+
+
+# ---- Public / visitor endpoints ----
 @api_router.get("/")
 async def root():
     return {"message": "Visitor Entry API"}
@@ -108,8 +216,13 @@ async def root():
 
 @api_router.get("/categories")
 async def get_categories():
-    """Return category + sub-option map for the dropdown."""
-    return SUB_OPTIONS
+    """Return dependent-dropdown maps."""
+    return {
+        "departments_staff": DEPARTMENTS_STAFF,
+        "departments_factory": DEPARTMENTS_FACTORY,
+        "department_employees": DEPARTMENT_EMPLOYEES,
+        "management_persons": MANAGEMENT_PERSONS,
+    }
 
 
 @api_router.post("/visitors", response_model=Visitor)
@@ -117,7 +230,28 @@ async def create_visitor(payload: VisitorCreate):
     if not payload.full_name.strip() or not payload.mobile.strip() or not payload.purpose.strip():
         raise HTTPException(status_code=400, detail="full_name, mobile and purpose are required")
     data = payload.model_dump()
-    data["sub_category"] = _validate_sub(data["category"], data.get("sub_category"))
+    # Sanity-check assignment based on category
+    if data["category"] == "management":
+        if not data.get("assigned_to") or data["assigned_to"] not in MANAGEMENT_PERSONS:
+            raise HTTPException(status_code=400, detail="assigned_to must be a management person")
+        data["department"] = None
+    elif data["category"] == "factory_visit":
+        if data.get("department") not in DEPARTMENTS_FACTORY:
+            raise HTTPException(status_code=400, detail=f"department must be one of {DEPARTMENTS_FACTORY}")
+        if not data.get("assigned_to") or data["assigned_to"] not in DEPARTMENT_EMPLOYEES.get(data["department"], []):
+            raise HTTPException(status_code=400, detail="assigned_to must be an employee of that department")
+    else:  # staff_visit
+        if data.get("department") not in DEPARTMENTS_STAFF:
+            raise HTTPException(status_code=400, detail=f"department must be one of {DEPARTMENTS_STAFF}")
+        if data["department"] == "Others":
+            if not data.get("assigned_to") or not data["assigned_to"].strip():
+                raise HTTPException(status_code=400, detail="assigned_to (custom person) is required for Others")
+        else:
+            if not data.get("assigned_to") or data["assigned_to"] not in DEPARTMENT_EMPLOYEES.get(data["department"], []):
+                raise HTTPException(status_code=400, detail="assigned_to must be an employee of that department")
+    # Use assigned_to as the visible person_to_meet for downstream UIs
+    if not data.get("person_to_meet"):
+        data["person_to_meet"] = data["assigned_to"] or ""
     visitor = Visitor(**data)
     await db.visitors.insert_one(visitor.model_dump())
     return visitor
@@ -145,19 +279,60 @@ async def get_visitor(visitor_id: str):
     return _hydrate(doc)
 
 
-@api_router.patch("/visitors/{visitor_id}/status", response_model=Visitor)
-async def update_status(visitor_id: str, payload: StatusUpdate, x_admin_pin: Optional[str] = Header(default=None)):
-    if x_admin_pin != ADMIN_PIN:
-        raise HTTPException(status_code=401, detail="Invalid admin PIN")
+async def _do_status_update(visitor_id: str, status: str, decided_by: str) -> Visitor:
+    existing = await db.visitors.find_one({"id": visitor_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Visitor not found")
+    if existing.get("status") and existing["status"] != "pending":
+        raise HTTPException(status_code=409, detail=f"Already {existing['status']} by {existing.get('decided_by') or 'someone'}")
     result = await db.visitors.find_one_and_update(
-        {"id": visitor_id},
-        {"$set": {"status": payload.status}},
+        {"id": visitor_id, "status": "pending"},
+        {"$set": {
+            "status": status,
+            "decided_by": decided_by,
+            "decided_at": datetime.now(timezone.utc).isoformat(),
+        }},
         return_document=True,
         projection={"_id": 0},
     )
     if not result:
-        raise HTTPException(status_code=404, detail="Visitor not found")
+        raise HTTPException(status_code=409, detail="Request was already decided")
     return _hydrate(result)
+
+
+@api_router.patch("/visitors/{visitor_id}/status", response_model=Visitor)
+async def update_status(
+    visitor_id: str,
+    payload: StatusUpdate,
+    x_admin_pin: Optional[str] = Header(default=None),
+    creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+):
+    decided_by: Optional[str] = None
+    # Admin path
+    if x_admin_pin and x_admin_pin == ADMIN_PIN:
+        decided_by = "admin"
+    elif creds and creds.scheme.lower() == "bearer":
+        try:
+            tok = jwt.decode(creds.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            emp = await db.employees.find_one({"id": tok.get("sub")}, {"_id": 0})
+            if not emp:
+                raise HTTPException(status_code=401, detail="Employee not found")
+            # Authorize: employee can decide if they are the assignee OR same department
+            visitor = await db.visitors.find_one({"id": visitor_id}, {"_id": 0})
+            if not visitor:
+                raise HTTPException(status_code=404, detail="Visitor not found")
+            allowed = (
+                visitor.get("assigned_to") == emp.get("name")
+                or visitor.get("department") == emp.get("department")
+            )
+            if not allowed:
+                raise HTTPException(status_code=403, detail="Not authorized for this request")
+            decided_by = emp.get("email")
+        except jwt.PyJWTError:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+    if not decided_by:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return await _do_status_update(visitor_id, payload.status, decided_by)
 
 
 @api_router.post("/admin/verify-pin")
@@ -165,6 +340,43 @@ async def verify_pin(payload: PinVerify):
     return {"ok": payload.pin == ADMIN_PIN}
 
 
+# ---- Employee auth ----
+@api_router.post("/employee/login")
+async def employee_login(payload: EmployeeLogin):
+    email = (payload.email or "").strip().lower()
+    if not email or not payload.password:
+        raise HTTPException(status_code=400, detail="email and password are required")
+    emp = await db.employees.find_one({"email": email})
+    # Always run a verify to keep response time uniform
+    valid = bool(emp) and _verify_pw(payload.password, emp.get("password_hash", ""))
+    if not emp or not valid:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    token = _create_jwt(emp["id"], emp["email"])
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "employee": {
+            "id": emp["id"],
+            "name": emp["name"],
+            "email": emp["email"],
+            "department": emp["department"],
+        },
+    }
+
+
+@api_router.get("/employee/me")
+async def employee_me(emp: dict = Depends(get_current_employee)):
+    return {"employee": {"id": emp["id"], "name": emp["name"], "email": emp["email"], "department": emp["department"]}}
+
+
+@api_router.get("/employee/visitors", response_model=List[Visitor])
+async def employee_visitors(emp: dict = Depends(get_current_employee)):
+    """List visitor requests for the logged-in employee's department (most recent first)."""
+    docs = await db.visitors.find({"department": emp["department"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return [_hydrate(d) for d in docs]
+
+
+# ---- QR code endpoints (public) ----
 def _qr_png(text: str, box_size: int = 8) -> bytes:
     qr = qrcode.QRCode(
         version=None,
@@ -182,24 +394,19 @@ def _qr_png(text: str, box_size: int = 8) -> bytes:
 
 @api_router.get("/qr")
 async def qr_for(text: str = Query(..., min_length=1, max_length=2048), size: int = Query(8, ge=2, le=20)):
-    """Generic QR-code generator. Returns PNG bytes."""
     png = _qr_png(text, box_size=size)
     return Response(content=png, media_type="image/png")
 
 
 @api_router.get("/qr-entry")
 async def qr_entry(size: int = Query(10, ge=2, le=20)):
-    """QR code that opens the visitor form in any mobile browser."""
-    public_url = os.environ.get("PUBLIC_APP_URL") or os.environ.get("EXPO_PUBLIC_BACKEND_URL") or "https://guest-pass-simple.preview.emergentagent.com"
-    # Ensure trailing slash points at the form root
+    public_url = (os.environ.get("PUBLIC_APP_URL") or os.environ.get("EXPO_PUBLIC_BACKEND_URL") or "").strip()
+    if not public_url:
+        raise HTTPException(status_code=500, detail="PUBLIC_APP_URL or EXPO_PUBLIC_BACKEND_URL must be set")
     if not public_url.endswith("/"):
-        public_url = public_url + "/"
+        public_url += "/"
     png = _qr_png(public_url, box_size=size)
-    return Response(
-        content=png,
-        media_type="image/png",
-        headers={"X-Entry-Url": public_url},
-    )
+    return Response(content=png, media_type="image/png", headers={"X-Entry-Url": public_url})
 
 
 app.include_router(api_router)
@@ -218,6 +425,15 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+@app.on_event("startup")
+async def _on_startup():
+    try:
+        await _seed_employees()
+        logger.info("Employees seeded.")
+    except Exception as e:
+        logger.error("Employee seed failed: %s", e)
 
 
 @app.on_event("shutdown")

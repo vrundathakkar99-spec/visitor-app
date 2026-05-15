@@ -33,47 +33,41 @@ export const CATEGORIES: { value: VisitorCategory; label: string }[] = [
   { value: 'management', label: 'Management' },
 ];
 
-export const SUB_OPTIONS: Record<VisitorCategory, string[]> = {
-  factory_visit: ['Production', 'QC'],
-  staff_visit: ['HR', 'SALES', 'ACCOUNT', 'PURCHASE', 'MAINTENANCE', 'DESIGN', 'QC', 'OPERATION'],
-  management: [
-    'RAJKUMAR CHAUDHARY',
-    'VINU CHAVDA',
-    'PRABHAT SINGH KUMAR',
-    'POOJA LOKHANDE',
-    'KRATI GUPTA',
-    'CHETNA BODKE',
-  ],
+// Department/employee structure
+export const DEPARTMENT_EMPLOYEES: Record<string, string[]> = {
+  Operation: ['Nishit Patel'],
+  QA: ['Vaibhav Desai'],
+  QC: ['Vasant Sarla'],
+  HR: ['Mohit Goswami', 'Vrunda Thakkar', 'Harshida Pandor'],
+  Maintenance: ['Patel Pritesh'],
+  Account: ['Parmar Romik'],
+  Purchase: ['Ajinkya Bapat'],
+  Marketing: ['Mayur Dod', 'RajvinderKaur Hunda'],
 };
 
-export const subOptionLabel: Record<VisitorCategory, string> = {
-  factory_visit: 'Department',
-  staff_visit: 'Department',
-  management: 'Person',
-};
+export const DEPARTMENTS_STAFF: string[] = [
+  ...Object.keys(DEPARTMENT_EMPLOYEES),
+  'Others',
+];
+
+export const DEPARTMENTS_FACTORY: string[] = ['Operation', 'QA', 'QC'];
+
+export const MANAGEMENT_PERSONS: string[] = [
+  'RAJKUMAR CHAUDHARY',
+  'VINU CHAVDA',
+  'PRABHAT SINGH KUMAR',
+  'POOJA LOKHANDE',
+  'KRATI GUPTA',
+  'CHETNA BODKE',
+];
 
 export const categoryColors: Record<
   VisitorCategory,
   { bg: string; text: string; border: string; accent: string }
 > = {
-  factory_visit: {
-    bg: '#FEF9C3',
-    text: '#854D0E',
-    border: '#FDE68A',
-    accent: '#CA8A04',
-  },
-  staff_visit: {
-    bg: '#DBEAFE',
-    text: '#1E40AF',
-    border: '#BFDBFE',
-    accent: '#2563EB',
-  },
-  management: {
-    bg: '#DCFCE7',
-    text: '#166534',
-    border: '#BBF7D0',
-    accent: '#16A34A',
-  },
+  factory_visit: { bg: '#FEF9C3', text: '#854D0E', border: '#FDE68A', accent: '#CA8A04' },
+  staff_visit: { bg: '#DBEAFE', text: '#1E40AF', border: '#BFDBFE', accent: '#2563EB' },
+  management: { bg: '#DCFCE7', text: '#166534', border: '#BBF7D0', accent: '#16A34A' },
 };
 
 export const categoryLabel = (c: VisitorCategory): string =>

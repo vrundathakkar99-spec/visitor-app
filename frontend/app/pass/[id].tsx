@@ -14,9 +14,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing, categoryColors, categoryLabel } from '../../src/theme';
 import { getVisitor, qrUrlFor, type Visitor } from '../../src/api';
 import { StatusBadge } from '../../src/StatusBadge';
-import { MaxwellLogo } from '../../src/MaxwellLogo';
 
 const monoFont = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
+// Prominent circular MW logo for the pass header
+const PASS_LOGO = require('../../assets/images/maxwell-circle-logo.jpg');
 
 export default function Pass() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -26,9 +27,7 @@ export default function Pass() {
 
   useEffect(() => {
     if (!id) return;
-    getVisitor(id)
-      .then(setVisitor)
-      .catch((e) => setError(e?.message || 'Not found'));
+    getVisitor(id).then(setVisitor).catch((e) => setError(e?.message || 'Not found'));
   }, [id]);
 
   if (error) {
@@ -41,13 +40,8 @@ export default function Pass() {
       </View>
     );
   }
-
   if (!visitor) {
-    return (
-      <View style={s.center}>
-        <ActivityIndicator color={colors.textPrimary} />
-      </View>
-    );
+    return <View style={s.center}><ActivityIndicator color={colors.textPrimary} /></View>;
   }
 
   const cat = categoryColors[visitor.category];
@@ -55,53 +49,68 @@ export default function Pass() {
 
   return (
     <ScrollView contentContainerStyle={s.container}>
-      {/* HORIZONTAL BADGE — landscape, suitable for clip-on holders */}
+      {/* VERTICAL HANGING BADGE */}
+      <View style={s.lanyardWrap}>
+        <View style={s.lanyardClip} />
+        <View style={s.lanyardHole} />
+      </View>
+
       <View style={s.pass} testID="visitor-pass-card">
-        {/* Top color strip */}
-        <View style={[s.colorStrip, { backgroundColor: cat.accent }]}>
-          <Text style={s.colorStripText} numberOfLines={1}>
+        {/* Top color stripe */}
+        <View style={[s.topStripe, { backgroundColor: cat.accent }]}>
+          <Text style={s.topStripeText} numberOfLines={1}>
             {categoryLabel(visitor.category).toUpperCase()}
-            {visitor.sub_category ? `  •  ${visitor.sub_category}` : ''}
           </Text>
         </View>
 
-        {/* Header (brand + pass#) */}
-        <View style={s.header}>
-          <MaxwellLogo size={36} />
-          <View style={s.headerRight}>
-            <Text style={s.passLabel}>VISITOR PASS</Text>
-            <Text style={s.passNum} testID="pass-number">{visitor.pass_number}</Text>
-          </View>
+        {/* Logo + brand block */}
+        <View style={s.brandBlock}>
+          <Image source={PASS_LOGO} style={s.brandLogo} resizeMode="contain" />
+          <Text style={s.brandName}>MAXWELL</Text>
+          <Text style={s.brandTagline}>VISITOR PASS</Text>
         </View>
 
-        {/* Body: photo | details | QR */}
-        <View style={s.body}>
+        {/* Photo */}
+        <View style={s.photoContainer}>
           <View style={[s.photoFrame, { borderColor: cat.accent }]}>
             {visitor.photo_base64 ? (
               <Image source={{ uri: visitor.photo_base64 }} style={s.photo} />
             ) : (
-              <Ionicons name="person" size={42} color={colors.textTertiary} />
+              <Ionicons name="person" size={58} color={colors.textTertiary} />
             )}
           </View>
+        </View>
 
-          <View style={s.details}>
-            <Text style={s.name} numberOfLines={2} testID="pass-name">{visitor.full_name}</Text>
-            <Row label="Purpose" value={visitor.purpose} />
-            <Row label="To Meet" value={visitor.person_to_meet || '—'} />
-            <Row label="Date/Time" value={new Date(visitor.created_at).toLocaleString()} />
-            <View style={s.statusInline}>
-              <Text style={s.statusLabel}>STATUS</Text>
-              <StatusBadge status={visitor.status} />
-            </View>
+        {/* Name + pass # */}
+        <Text style={s.name} testID="pass-name" numberOfLines={2}>{visitor.full_name}</Text>
+        <View style={s.passNumberPill}>
+          <Text style={s.passNumberText} testID="pass-number">{visitor.pass_number}</Text>
+        </View>
+
+        <View style={s.divider} />
+
+        {/* Details */}
+        <View style={s.details}>
+          <DetailRow label="Category" value={categoryLabel(visitor.category)} accent={cat.accent} />
+          {visitor.department ? (
+            <DetailRow label="Department" value={visitor.department} />
+          ) : null}
+          <DetailRow label={visitor.category === 'management' ? 'Person' : 'To Meet'} value={visitor.assigned_to || visitor.person_to_meet || '—'} />
+          <DetailRow label="Purpose" value={visitor.purpose} />
+          <DetailRow label="Date & Time" value={new Date(visitor.created_at).toLocaleString()} />
+          <DetailRow label="Mobile" value={visitor.mobile} />
+        </View>
+
+        <View style={s.divider} />
+
+        {/* Status + QR */}
+        <View style={s.bottomRow}>
+          <View style={s.statusBlock}>
+            <Text style={s.statusLabel}>STATUS</Text>
+            <StatusBadge status={visitor.status} />
           </View>
-
-          <View style={s.qrCol}>
-            <Image
-              source={{ uri: qrSrc }}
-              style={s.qrImg}
-              resizeMode="contain"
-              testID="visitor-pass-qr"
-            />
+          <View style={s.qrBlock}>
+            <Image source={{ uri: qrSrc }} style={s.qr} resizeMode="contain" testID="visitor-pass-qr" />
             <Text style={s.qrCaption}>SCAN</Text>
           </View>
         </View>
@@ -109,7 +118,7 @@ export default function Pass() {
         {/* Footer strip */}
         <View style={s.footer}>
           <Text style={s.footerText}>Maxwell Visitor Management</Text>
-          <Text style={s.footerSubtext}>Please keep this pass visible</Text>
+          <Text style={s.footerSubtext}>Please keep this pass visible during your visit</Text>
         </View>
       </View>
 
@@ -120,11 +129,11 @@ export default function Pass() {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function DetailRow({ label, value, accent }: { label: string; value: string; accent?: string }) {
   return (
     <View style={s.row}>
       <Text style={s.rowLabel}>{label}</Text>
-      <Text style={s.rowValue} numberOfLines={2}>{value}</Text>
+      <Text style={[s.rowValue, accent && { color: accent, fontWeight: '700' }]} numberOfLines={2}>{value}</Text>
     </View>
   );
 }
@@ -132,143 +141,87 @@ function Row({ label, value }: { label: string; value: string }) {
 const s = StyleSheet.create({
   container: {
     backgroundColor: colors.bg,
-    padding: spacing.md,
+    padding: spacing.lg,
     alignItems: 'center',
-    paddingBottom: 50,
+    paddingBottom: 60,
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
+  // Lanyard hole top of card
+  lanyardWrap: { alignItems: 'center', marginBottom: -6, zIndex: 2 },
+  lanyardClip: {
+    width: 60, height: 14,
+    backgroundColor: '#94A3B8',
+    borderTopLeftRadius: 4, borderTopRightRadius: 4,
+  },
+  lanyardHole: {
+    width: 28, height: 8,
+    backgroundColor: '#FAFAFA',
+    borderRadius: 4,
+    marginTop: -11,
+    borderWidth: 1, borderColor: '#64748B',
+  },
   pass: {
     width: '100%',
-    maxWidth: 600,
+    maxWidth: 360,
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    paddingBottom: 0,
+    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 }, elevation: 2,
   },
-  colorStrip: {
-    paddingVertical: 6,
+  topStripe: { paddingVertical: 6, alignItems: 'center' },
+  topStripeText: { color: '#fff', fontWeight: '800', fontSize: 11, letterSpacing: 2 },
+  brandBlock: {
     alignItems: 'center',
+    paddingTop: 16, paddingBottom: 4,
   },
-  colorStripText: {
-    fontSize: 11,
-    color: '#fff',
-    fontWeight: '800',
-    letterSpacing: 2,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingTop: 10,
-    paddingBottom: 4,
-  },
-  headerRight: { alignItems: 'flex-end' },
-  passLabel: {
-    fontSize: 9,
-    color: colors.textTertiary,
-    letterSpacing: 1.5,
-    fontWeight: '700',
-  },
-  passNum: {
-    fontFamily: monoFont,
-    fontSize: 11,
-    color: colors.textPrimary,
-    letterSpacing: 0.5,
-    fontWeight: '600',
-    marginTop: 1,
-  },
-  body: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    gap: 12,
-    alignItems: 'flex-start',
-  },
+  brandLogo: { width: 70, height: 70 },
+  brandName: { fontSize: 18, fontWeight: '800', color: colors.textPrimary, letterSpacing: 4, marginTop: 6 },
+  brandTagline: { fontSize: 10, color: colors.textTertiary, letterSpacing: 2, fontWeight: '700', marginTop: 2 },
+  photoContainer: { alignItems: 'center', marginTop: 10 },
   photoFrame: {
-    width: 84,
-    height: 100,
-    borderRadius: 6,
-    borderWidth: 2,
-    backgroundColor: colors.elevated,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
+    width: 130, height: 150, borderRadius: 8, borderWidth: 3,
+    backgroundColor: colors.elevated, alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
   },
   photo: { width: '100%', height: '100%' },
-  details: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
   name: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    letterSpacing: -0.2,
-    marginBottom: 4,
+    fontSize: 20, fontWeight: '800', color: colors.textPrimary,
+    letterSpacing: -0.2, marginTop: 14, textAlign: 'center', paddingHorizontal: spacing.md,
   },
-  row: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
-  rowLabel: { color: colors.textSecondary, fontSize: 10, fontWeight: '500', minWidth: 56 },
-  rowValue: {
-    color: colors.textPrimary,
-    fontSize: 11,
-    fontWeight: '600',
-    flex: 1,
-    textAlign: 'right',
+  passNumberPill: {
+    alignSelf: 'center', marginTop: 6,
+    backgroundColor: colors.elevated, borderWidth: 1, borderColor: colors.border,
+    borderRadius: 6, paddingHorizontal: 10, paddingVertical: 3,
   },
-  statusInline: {
+  passNumberText: { fontFamily: monoFont, fontSize: 11, fontWeight: '700', letterSpacing: 1, color: colors.textPrimary },
+  divider: { height: 1, backgroundColor: colors.border, marginVertical: 12, marginHorizontal: spacing.md },
+  details: { paddingHorizontal: spacing.md, gap: 2 },
+  row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, gap: 8 },
+  rowLabel: { color: colors.textSecondary, fontSize: 11, fontWeight: '500', flexShrink: 0 },
+  rowValue: { color: colors.textPrimary, fontSize: 12, fontWeight: '600', flex: 1, textAlign: 'right' },
+  bottomRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 6,
-  },
-  statusLabel: {
-    fontSize: 9,
-    color: colors.textTertiary,
-    fontWeight: '700',
-    letterSpacing: 1.5,
-  },
-  qrCol: {
-    alignItems: 'center',
-    gap: 4,
-  },
-  qrImg: {
-    width: 84,
-    height: 84,
-    backgroundColor: '#fff',
-  },
-  qrCaption: {
-    fontSize: 9,
-    color: colors.textTertiary,
-    letterSpacing: 1.5,
-    fontWeight: '700',
-  },
-  footer: {
-    paddingVertical: 8,
     paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+  },
+  statusBlock: { gap: 4 },
+  statusLabel: { fontSize: 10, color: colors.textTertiary, letterSpacing: 1.5, fontWeight: '700' },
+  qrBlock: { alignItems: 'center', gap: 4 },
+  qr: { width: 78, height: 78, backgroundColor: '#fff' },
+  qrCaption: { fontSize: 9, color: colors.textTertiary, fontWeight: '700', letterSpacing: 1.5 },
+  footer: {
+    paddingVertical: 8, paddingHorizontal: spacing.md,
     backgroundColor: colors.elevated,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopWidth: 1, borderTopColor: colors.border,
     alignItems: 'center',
   },
-  footerText: {
-    fontSize: 10,
-    color: colors.textPrimary,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-  },
-  footerSubtext: {
-    fontSize: 9,
-    color: colors.textTertiary,
-    marginTop: 1,
-  },
+  footerText: { fontSize: 10, color: colors.textPrimary, fontWeight: '600', letterSpacing: 0.5 },
+  footerSubtext: { fontSize: 9, color: colors.textTertiary, marginTop: 1 },
   error: { color: colors.rejectedText, fontSize: 15 },
   linkBtn: { marginTop: 16 },
   link: { color: colors.textSecondary, textDecorationLine: 'underline' },
